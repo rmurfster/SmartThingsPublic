@@ -16,6 +16,11 @@
 
 include 'asynchttp_v1'
 
+preferences {
+	input("logFilter", "number",title: "(0=off,1=ERROR only,2=<1+WARNING>,3=<2+INFO>,4=<3+DEBUG>,5=<4+TRACE>)",  range: "0..5",
+ 		description: "optional" )
+}
+
 metadata {
   definition (name: "My Solar Status Handler", namespace: "rmurfster", author: "Richard Murphy") {
     capability "Battery"
@@ -32,10 +37,10 @@ metadata {
     attribute "bmkVolts", "number"
     attribute "bmkAmps", "number"
     attribute "chargeStatus", "string"
-    attribute "sunrise", "Date"
-    attribute "sunset", "Date"
+    attribute "sunrise", "string"
+    attribute "sunset", "string"
     
-    command "setSunriseSunset", ["Date", "Date"]
+    command "setSunriseSunset", ["string", "string"]
   }
 
   simulator {
@@ -109,9 +114,15 @@ metadata {
     standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat") {
       state "default", action:"refresh.refresh", icon:"st.secondary.refresh"
     }
+    valueTile("sunrise", "device.sunrise", decoration: "flat") {
+      state "default", label:'Sunrise: ${currentValue}'
+    }
+    valueTile("sunset", "device.sunset", decoration: "flat") {
+      state "default", label:'Sunset: ${currentValue}'
+    }
 
     main (["battery"])
-    details(["timeStamp","battery","powerSource","chargeStatus","power","energy","bmkVolts","bmkAmps","batteryTemperature","transformerTemperature","acLoadVolts", "acLoadAmps", "refresh"])
+    details(["timeStamp","battery","powerSource","chargeStatus","power","energy","bmkVolts","bmkAmps","batteryTemperature","transformerTemperature","acLoadVolts", "acLoadAmps", "refresh","sunrise","sunset"])
   }
 }
 
@@ -128,7 +139,7 @@ metadata {
 *         action is desired at this point.
 */
 def parse(String description) {
-  log.debug "Parsing '${description}'"
+  traceEvent("Parsing '${description}'", get_LOG_INFO())
 }
 
 /**
@@ -143,7 +154,7 @@ def installed() {
 
 def updated()
 {
-  log.trace "updated()"
+  traceEvent("updated()", get_LOG_INFO())
   unschedule()
   installed()
 }
@@ -153,19 +164,19 @@ def updated()
 * tiles so the user gets the correct information.
 */
 def startPoll() {
-  log.trace("startPoll")
+  traceEvent("startPoll()", get_LOG_INFO())
   unschedule()
   // Schedule 1 minute polling of speaker status (song average length is 3-4 minutes)
   def sec = Math.round(Math.floor(Math.random() * 60))
   def cron = "$sec 0/1 * * * ?" // every 1 min
-  log.debug "schedule('$cron', getSolarData)"
+  traceEvent("schedule('$cron', getSolarData)", get_LOG_DEBUG())
   schedule(cron, getSolarData)
 }
 
 def getSolarData()
 {
   // See http://groovy-lang.org/processing-xml.html
-  log.trace("getSolarData()")
+  traceEvent("getSolarData()", get_LOG_INFO())
 
   def params = [
     uri: "http://data.magnumenergy.com",
@@ -179,78 +190,125 @@ def getSolarData()
 
 void setSunriseSunset( sunrise, sunset )
 {
-  log.trace "setSunriseSunset()"
-  log.debug "sunrise: ${sunrise}"
-  log.debug "sunset: ${sunset}"
+  traceEvent("setSunriseSunset()", get_LOG_INFO())
+  traceEvent("sunrise: ${sunrise}", get_LOG_DEBUG())
+  traceEvent("sunset: ${sunset}", get_LOG_DEBUG())
   sendEvent(name : "sunrise", value: sunrise)
   sendEvent(name : "sunset", value: sunset)
 }
 
+private int get_LOG_ERROR() {return (int)1}
+private int get_LOG_WARN()  {return (int)2}
+private int get_LOG_INFO()  {return (int)3}
+private int get_LOG_DEBUG() {return (int)4}
+private int get_LOG_TRACE() {return (int)5}
+
+def traceEvent(message, traceLevel=5)
+{
+  int LOG_ERROR= get_LOG_ERROR()
+  int LOG_WARN=  get_LOG_WARN()
+  int LOG_INFO=  get_LOG_INFO()
+  int LOG_DEBUG= get_LOG_DEBUG()
+  int LOG_TRACE= get_LOG_TRACE()
+
+  int filterLevel = (int)(settings.logFilter ? settings.logFilter.toInteger() : LOG_WARN)
+
+  if (filterLevel >= traceLevel) 
+  {
+    switch (traceLevel) {
+      case LOG_ERROR:
+        log.error "${message}"
+        break
+      case LOG_WARN:
+        log.warn "${message}"
+        break
+      case LOG_INFO:
+        log.info  "${message}"
+        break
+      case LOG_TRACE:
+        log.trace "${message}"
+        break
+      case LOG_DEBUG:
+      default:
+        log.debug "${message}"
+        break
+    }  /* end switch*/              
+  }
+}
+
 def processResponse(resp, data)
 {
+  int LOG_ERROR= get_LOG_ERROR()
+  int LOG_WARN=  get_LOG_WARN()
+  int LOG_INFO=  get_LOG_INFO()
+  int LOG_DEBUG= get_LOG_DEBUG()
+  int LOG_TRACE= get_LOG_TRACE()
+
   def temp
   
-  log.trace("processResponse()")
-  log.debug "resp.status: ${resp.status}"
-  log.debug "resp.hasError(): ${resp.hasError()}"
+  traceEvent("processResponse()", LOG_INFO)
+  
+  if (resp.hasError())
+  {
+    traceEvent("resp.hasError(): ${resp.hasError()}", LOG_ERROR)
+    traceEvent("resp.status: ${resp.status}", LOG_ERROR)
+    traceEvent("errorData: ${response.errorData}", LOG_ERROR)
+    return
+  }  
 
   //def headers = resp.headers
   //headers.each { header, value ->
-  //    log.debug "$header: $value"
+  //    traceEvent("$header: $value", LOG_DEBUG)
   //}
 
-  //log.debug "resp class: ${resp.getClass()}"
-  //log.debug "resp.data class: ${resp.data.class}"
-  //log.debug "response contentType: ${resp.contentType}"
-  //log.debug "response data: ${resp.data}"
-  //log.debug "resp: ${resp}"
-  //log.debug "data: ${data}"
+  //traceEvent("resp class: ${resp.getClass()}", LOG_DEBUG)
+  //traceEvent("resp.data class: ${resp.data.class}", LOG_DEBUG)
+  //traceEvent("response contentType: ${resp.contentType}", LOG_DEBUG)
+  //traceEvent("response data: ${resp.data}", LOG_DEBUG)
+  //traceEvent("resp: ${resp}", LOG_DEBUG)
+  //traceEvent("data: ${data}", LOG_DEBUG)
 
   // Get xml data between <table> ... </table>
   def start = resp.data.indexOf("<table")
   def end = resp.data.indexOf("</table>", start)
   def newData = resp.data.substring(start, end+8)
   newData = newData.replace("&deg;", "")
-  //log.debug "newData: ${newData}"
 
   // Process the <table> xml data.
   def sResponse = new XmlSlurper().parseText(newData)
   //def sResponse = new XmlParser().parseText(newData)
-
   assert sResponse instanceof groovy.util.slurpersupport.GPathResult //groovy.util.Node
 
-  //log.debug "sResponse Name: ${sResponse.name()}"
-
   def dataDate = sResponse.tr[0].td.span.text()[0..-5]
-  log.debug "dataDate: ${dataDate}"
+  traceEvent("dataDate: ${dataDate}", LOG_DEBUG)
 
   def percentCharge = sResponse.tr[2].td.span.text().substring(1).replaceAll("%", "").toInteger()
-  log.debug "percentCharge: ${percentCharge}"
+  traceEvent("percentCharge: ${percentCharge}", LOG_DEBUG)
 
   // "52.42 VDC @ 1.40 amps (73 watts)"
   def voltsAmps = sResponse.tr[3].td.span.text().substring(1)
-  log.debug "voltsAmps: ${voltsAmps}"
+  traceEvent("voltsAmps: ${voltsAmps}", LOG_DEBUG)
   temp = voltsAmps.split(" ")
   def bmkVolts = temp[0].toFloat()
   def bmkAmps = temp[3].toFloat()
-  log.debug "bmkVolts: ${bmkVolts}"
-  log.debug "bmkAmps: ${bmkAmps}"
+  traceEvent("bmkVolts: ${bmkVolts}", LOG_DEBUG)
+  traceEvent("bmkAmps: ${bmkAmps}", LOG_DEBUG)
   
   def batteryTemperature = sResponse.tr[11].td.text().split("/")[1].replaceAll("F", "").toInteger()
-  log.debug "batteryTemperature: ${batteryTemperature}"
+  traceEvent("batteryTemperature: ${batteryTemperature}", LOG_DEBUG)
 
   def transformerTemperature = sResponse.tr[12].td.text().split("/")[1].replaceAll("F", "").toInteger()
-  log.debug "transformerTemperatures: ${transformerTemperature}"
+  traceEvent("transformerTemperatures: ${transformerTemperature}", LOG_DEBUG)
 
   // Get AC Load in volts / amps
   def acOut = sResponse.tr[14].td.text()
-  log.debug "acOut: ${acOut}"
+  traceEvent("acOut: ${acOut}", LOG_DEBUG)
   // "Approximately 120 volts AC @ 5 amps"
   temp = acOut.split(" ")
   def acLoadVolts = temp[1].toInteger()
   def acLoadAmps = temp[5].toInteger()
-  log.debug "acLoadVolts: ${acLoadVolts}"
-  log.debug "acLoadAmps: ${acLoadAmps}"
+  traceEvent("acLoadVolts: ${acLoadVolts}", LOG_DEBUG)
+  traceEvent("acLoadAmps: ${acLoadAmps}", LOG_DEBUG)
   
   // Get AC In (if in Grid Mode)
   // "Approximately 4 amps"
@@ -262,26 +320,30 @@ def processResponse(resp, data)
   // Get DC Load in Volts/Amps
   // Get AC Load in volts / amps
   def dcOut = sResponse.tr[17].td.span.text()
-  log.debug "dcOut: ${dcOut}"
+  traceEvent("dcOut: ${dcOut}", LOG_DEBUG)
   // "60.0 VDC @ 13 amps (780 watts)"
   temp = dcOut.split(" ")
   def dcLoadVolts = temp[0].toFloat()
   def dcLoadAmps = temp[3].toInteger()
-  log.debug "dcLoadVolts: ${dcLoadVolts}"
-  log.debug "dcLoadAmps: ${dcLoadAmps}"
+  traceEvent("dcLoadVolts: ${dcLoadVolts}", LOG_DEBUG)
+  traceEvent("dcLoadAmps: ${dcLoadAmps}", LOG_DEBUG)
   
   /* All we really care about from the DC Load is Amps
    * as it tells us the Load Source (Grid/Solar).
    */
-  def powerSource = (dcLoadAmps > 0) ? "Solar" : "Grid"
-  log.debug "powerSource: ${powerSource}"
+  def powerSource = (dcLoadAmps > 0) ? "PV" : "Grid"
+  traceEvent("powerSource: ${powerSource}", LOG_DEBUG)
 
-  //def sunrise = new Date(me.currentSunrise)
-  //def sunset = new Date(me.currentSunset)
-  def isDaylight = (boolean) (me.currentSunrise) ? timeOfDayIsBetween(me.currentSunrise, me.currentSunset, new Date(), location.timeZone) : true
-  log.debug "sunrise: ${me.currentSunrise}"
-  log.debug "sunset: ${me.currentSunset}"
-  log.debug "isDaylight: ${isDaylight}"
+  def isDaylight = true
+  if (device.currentValue("sunrise"))
+  {
+    def sunrise = new Date(device.currentValue("sunrise"))
+    def sunset = new Date(device.currentValue("sunset"))
+    traceEvent("sunrise: ${sunrise}", LOG_DEBUG)
+    traceEvent("sunset: ${sunset}", LOG_DEBUG)
+    isDaylight = (boolean) timeOfDayIsBetween(sunrise, sunset, new Date(), location.timeZone)
+  }
+  traceEvent("isDaylight: ${isDaylight}", LOG_DEBUG)
 
   def chargeStatus = (String)(isDaylight ? "Bulk MPPT" : "Resting")
   if (isDaylight)
@@ -295,7 +357,7 @@ def processResponse(resp, data)
       chargeStatus = "Float"
     }  
   }
-  log.debug "chargeStatus: ${chargeStatus}"
+  traceEvent("chargeStatus: ${chargeStatus}", LOG_DEBUG)
 
   // Put data in our device registers
   sendEvent(name : "timeStamp", value : dataDate)
