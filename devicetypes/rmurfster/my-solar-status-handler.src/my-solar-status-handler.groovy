@@ -23,12 +23,19 @@ metadata {
     capability "Power Meter"
     capability "Temperature Measurement"
 
-    attribute "bmkAmpsVolts", "string"
+    attribute "timeStamp", "string"
     attribute "batteryTemperature", "number"
     attribute "transformerTemperature", "number"
     attribute "acLoadVolts", "number"
     attribute "acLoadAmps", "number"
     attribute "powerSource", "string"
+    attribute "bmkVolts", "number"
+    attribute "bmkAmps", "number"
+    attribute "chargeStatus", "string"
+    attribute "sunrise", "Date"
+    attribute "sunset", "Date"
+    
+    command "setSunriseSunset", ["Date", "Date"]
   }
 
   simulator {
@@ -36,17 +43,8 @@ metadata {
   }
 
   tiles {
-    valueTile("timestamp", "device.timestamp", decoration: "flat") {
+    valueTile("timeStamp", "device.timeStamp", decoration: "flat") {
       state "Data Timestamp", label:'${currentValue}'
-    }
-    valueTile("loadSource", "device.loadSource", decoration: "flat") {
-      state "default", label:'Load Source: ${currentValue}'
-    }
-    valueTile("power", "device.power", decoration: "flat") {
-      state "default", label:'Power: ${currentValue} W'
-    }
-    valueTile("energy", "device.energy", decoration: "flat") {
-      state "default", label:'Energy: ${currentValue} kWh'
     }
     valueTile("battery", "device.battery", decoration: "flat", inactiveLabel: false) {
       state "default", label:'SOC: ${currentValue}%', unit:"", 
@@ -58,10 +56,25 @@ metadata {
         [value: 99, color: "#44b621"]
       ]
     }
-    valueTile("bmkAmpsVolts", "device.BmkAmpsVolts", decoration: "flat") {
-      state "default", label:'BMK: ${currentValue}'
+    valueTile("powerSource", "device.powerSource", decoration: "flat") {
+      state "default", label:'Load Source: ${currentValue}'
     }
-    valueTile("batteryTemperature", "device.batteryTemperature", width: 2, height: 2) {
+    valueTile("chargeStatus", "device.chargeStatus", decoration: "flat") {
+      state "default", label:'Charge Status: ${currentValue}'
+    }
+    valueTile("power", "device.power", decoration: "flat") {
+      state "default", label:'Power: ${currentValue} W'
+    }
+    valueTile("energy", "device.energy", decoration: "flat") {
+      state "default", label:'Energy: ${currentValue} kWh'
+    }
+    valueTile("bmkVolts", "device.bmkVolts", decoration: "flat") {
+      state "default", label:'BMK Volts: ${currentValue}'
+    }
+    valueTile("bmkAmps", "device.bmkAmps", decoration: "flat") {
+      state "default", label:'BMK Amps: ${currentValue}'
+    }
+    valueTile("batteryTemperature", "device.batteryTemperature", decoration: "flat") {
       state("default", label:'Battery Temp: ${currentValue}°', unit:"F",
         backgroundColors:[
               // Fahrenheit
@@ -74,7 +87,7 @@ metadata {
               [value: 96, color: "#bc2323"]
               ])
     }
-    valueTile("transformerTemperature", "device.transformerTemperature", width: 2, height: 2) {
+    valueTile("transformerTemperature", "device.transformerTemperature", decoration: "flat") {
       state("default", label:'Transformer Temp: ${currentValue}°', unit:"F",
         backgroundColors:[
               // Fahrenheit
@@ -98,7 +111,7 @@ metadata {
     }
 
     main (["battery"])
-    details(["timestamp","loadSource","power","energy","BmkAmpsVolts", "batteryTemperature","transformerTemperature","acLoadVolts", "acLoadAmps", "refresh"])
+    details(["timeStamp","battery","powerSource","chargeStatus","power","energy","bmkVolts","bmkAmps","batteryTemperature","transformerTemperature","acLoadVolts", "acLoadAmps", "refresh"])
   }
 }
 
@@ -126,6 +139,13 @@ def parse(String description) {
 def installed() {
   startPoll()
   getSolarData()
+}
+
+def updated()
+{
+  log.trace "updated()"
+  unschedule()
+  installed()
 }
 
 /**
@@ -157,8 +177,19 @@ def getSolarData()
   asynchttp_v1.get(processResponse, params)
 }
 
+void setSunriseSunset( sunrise, sunset )
+{
+  log.trace "setSunriseSunset()"
+  log.debug "sunrise: ${sunrise}"
+  log.debug "sunset: ${sunset}"
+  sendEvent(name : "sunrise", value: sunrise)
+  sendEvent(name : "sunset", value: sunset)
+}
+
 def processResponse(resp, data)
 {
+  def temp
+  
   log.trace("processResponse()")
   log.debug "resp.status: ${resp.status}"
   log.debug "resp.hasError(): ${resp.hasError()}"
@@ -190,30 +221,43 @@ def processResponse(resp, data)
 
   //log.debug "sResponse Name: ${sResponse.name()}"
 
-  def dataDate = sResponse.tr[0].td.span.text()
+  def dataDate = sResponse.tr[0].td.span.text()[0..-5]
   log.debug "dataDate: ${dataDate}"
 
   def percentCharge = sResponse.tr[2].td.span.text().substring(1).replaceAll("%", "").toInteger()
   log.debug "percentCharge: ${percentCharge}"
 
+  // "52.42 VDC @ 1.40 amps (73 watts)"
   def voltsAmps = sResponse.tr[3].td.span.text().substring(1)
   log.debug "voltsAmps: ${voltsAmps}"
-
-  def batteryTemperature = sResponse.tr[11].td.text().split("/")[1].replaceAll("F", "")
+  temp = voltsAmps.split(" ")
+  def bmkVolts = temp[0].toFloat()
+  def bmkAmps = temp[3].toFloat()
+  log.debug "bmkVolts: ${bmkVolts}"
+  log.debug "bmkAmps: ${bmkAmps}"
+  
+  def batteryTemperature = sResponse.tr[11].td.text().split("/")[1].replaceAll("F", "").toInteger()
   log.debug "batteryTemperature: ${batteryTemperature}"
 
-  def transformerTemperature = sResponse.tr[12].td.text().split("/")[1].replaceAll("F", "")
+  def transformerTemperature = sResponse.tr[12].td.text().split("/")[1].replaceAll("F", "").toInteger()
   log.debug "transformerTemperatures: ${transformerTemperature}"
 
   // Get AC Load in volts / amps
   def acOut = sResponse.tr[14].td.text()
   log.debug "acOut: ${acOut}"
   // "Approximately 120 volts AC @ 5 amps"
-  def temp = acOut.split(" ")
-  def acLoadVolts = temp[1]
-  def acLoadAmps = temp[5]
+  temp = acOut.split(" ")
+  def acLoadVolts = temp[1].toInteger()
+  def acLoadAmps = temp[5].toInteger()
   log.debug "acLoadVolts: ${acLoadVolts}"
   log.debug "acLoadAmps: ${acLoadAmps}"
+  
+  // Get AC In (if in Grid Mode)
+  // "Approximately 4 amps"
+  if (acLoadAmps == 0)
+  {
+  	acLoadAmps = sResponse.tr[15].td.text().split(" ")[1].toInteger()
+  }
 
   // Get DC Load in Volts/Amps
   // Get AC Load in volts / amps
@@ -221,7 +265,7 @@ def processResponse(resp, data)
   log.debug "dcOut: ${dcOut}"
   // "60.0 VDC @ 13 amps (780 watts)"
   temp = dcOut.split(" ")
-  def dcLoadVolts = temp[0]
+  def dcLoadVolts = temp[0].toFloat()
   def dcLoadAmps = temp[3].toInteger()
   log.debug "dcLoadVolts: ${dcLoadVolts}"
   log.debug "dcLoadAmps: ${dcLoadAmps}"
@@ -229,20 +273,42 @@ def processResponse(resp, data)
   /* All we really care about from the DC Load is Amps
    * as it tells us the Load Source (Grid/Solar).
    */
-  def loadSource = (dcLoadAmps > 0) ? "Solar" : "Grid"
-  log.debug "loadSource: ${loadSource}"
+  def powerSource = (dcLoadAmps > 0) ? "Solar" : "Grid"
+  log.debug "powerSource: ${powerSource}"
+
+  //def sunrise = new Date(me.currentSunrise)
+  //def sunset = new Date(me.currentSunset)
+  def isDaylight = (boolean) (me.currentSunrise) ? timeOfDayIsBetween(me.currentSunrise, me.currentSunset, new Date(), location.timeZone) : true
+  log.debug "sunrise: ${me.currentSunrise}"
+  log.debug "sunset: ${me.currentSunset}"
+  log.debug "isDaylight: ${isDaylight}"
+
+  def chargeStatus = (String)(isDaylight ? "Bulk MPPT" : "Resting")
+  if (isDaylight)
+  {
+    if (bmkVolts > (float) 59)
+    {
+      chargeStatus = "Absorb"
+    }
+    else if (bmkVolts > (float) 52.5 && percentCharge == 100)
+    {
+      chargeStatus = "Float"
+    }  
+  }
+  log.debug "chargeStatus: ${chargeStatus}"
 
   // Put data in our device registers
-  sendEvent(name : "timestamp", value : dataDate)
+  sendEvent(name : "timeStamp", value : dataDate)
+  sendEvent(name : "chargeStatus", value: chargeStatus)
   sendEvent(name : "power", value : 0)
   sendEvent(name : "energy", value : 0)
   sendEvent(name : "battery", value : percentCharge)
-  sendEvent(name : "BmkAmpsVolts", value : voltsAmps)
+  sendEvent(name : "bmkVolts", value: bmkVolts)
+  sendEvent(name : "bmkAmps", value: bmkAmps)
   sendEvent(name : "batteryTemperature", value : batteryTemperature)
   sendEvent(name : "transformerTemperature", value : transformerTemperature)
   sendEvent(name : "temperature", value: transformerTemperature)
   sendEvent(name : "acLoadVolts", value: acLoadVolts)
   sendEvent(name : "acLoadAmps", value: acLoadAmps)
-  sendEvent(name : "loadSource", value: loadSource)
-
+  sendEvent(name : "powerSource", value: powerSource)
 }
