@@ -1,11 +1,8 @@
 include 'asynchttp_v1'
 import java.text.SimpleDateFormat
 
-//import groovy.time.TimeCategory 
-//import groovy.time.TimeDuration
-
 /**
-*  Test App
+*  Ask Solar Panels
 *
 *  Copyright 2017 Richard Murphy
 *
@@ -249,4 +246,3 @@ def processDevice()
     
   return ["voiceOutput" : outputTxt]
 }
-
