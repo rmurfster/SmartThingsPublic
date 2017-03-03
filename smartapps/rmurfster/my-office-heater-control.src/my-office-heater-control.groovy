@@ -74,19 +74,24 @@ preferences {
   section ("On Modes...") {
     input "onModes", "mode", title: "select mode(s)", multiple: true, required: true
   }
+  section("Debugging") {
+	input "logFilter", "number", title: "(0=off,1=ERROR only,2=<1+WARNING>,3=<2+INFO>,4=<3+DEBUG>,5=<4+TRACE>)",  
+    	range: "0..5", description: "optional", defaultValue: 3
+  }
+  
 //  section("Title") {
     // TODO: put inputs here
 //  }
 }
 
 def installed() {
-  log.debug "Installed with settings: ${settings}"
+  traceEvent("Installed with settings: ${settings}", get_LOG_INFO())
 
   initialize()
 }
 
 def updated() {
-  log.debug "Updated with settings: ${settings}"
+  traceEvent("Updated with settings: ${settings}", get_LOG_INFO())
 
   unsubscribe()
   initialize()
@@ -106,15 +111,16 @@ def initialize() {
   // Call evaluate function when start/end times expire.
   def start = timeToday(startTime, location.timeZone)
   def end = timeToday(endTime, location.timeZone)
-  log.debug("start: $start")
-  log.debug("end: $end")
+  traceEvent("start: $start", get_LOG_DEBUG())
+  traceEvent("end: $end", get_LOG_DEBUG())
   schedule(start.getTime() + 10000, startTimeStateHandler)
   schedule(end.getTime() + 10000, endTimeStateHandler)
   
   // Sync the Thermostat's Temperature with the current Temperature of the sensor.
   theThermostat.setTemperature(theTemperature.currentTemperature ?
       theTemperature.currentTemperature : 70)
-  
+
+
   // Set Initial Thermostat Mode.
   evaluate()
 }
@@ -125,7 +131,7 @@ def initialize() {
  */
 def evaluate()
 {
-  log.debug "evaluate()"
+  traceEvent("evaluate()", get_LOG_INFO())
   def currentTime = new Date()
   def currentMode = location.getMode()
   def validMode = currentMode in onModes
@@ -143,20 +149,20 @@ def evaluate()
 
   def isThermostatSetToHeat =( theThermostat.currentThermostatMode in ["heat", "emergency heat", "auto"])
 
-  log.debug "currentMode: $currentMode"
-  log.debug "theMotionSensor.currentMotion: $theMotionSensor.currentMotion"
-  log.debug "theThermostat.currentThermostatMode: $theThermostat.currentThermostatMode"
-  log.debug("currentTime: " + dfTimeDebug.format(currentTime))
-  log.debug "startTime: $startTime"
-  log.debug "endTime: $endTime"
-  log.debug "activeTime: $activeTime"
-  log.debug "validMode: $validMode"
-  log.debug "day: $day"
-  log.debug "days: $days"
-  log.debug "dayCheck: $dayCheck"
-  log.debug("theTemperature.currentTemperature: $theTemperature.currentTemperature")
-  log.debug("isThermostatSetToHeat: $isThermostatSetToHeat")
-  //log.debug "modes: $modes"
+  traceEvent("currentMode: $currentMode", get_LOG_DEBUG())
+  traceEvent("theMotionSensor.currentMotion: $theMotionSensor.currentMotion", get_LOG_DEBUG())
+  traceEvent("theThermostat.currentThermostatMode: $theThermostat.currentThermostatMode", get_LOG_DEBUG())
+  traceEvent("currentTime: " + dfTimeDebug.format(currentTime), get_LOG_DEBUG())
+  traceEvent("startTime: $startTime", get_LOG_DEBUG())
+  traceEvent("endTime: $endTime", get_LOG_DEBUG())
+  traceEvent("activeTime: $activeTime", get_LOG_DEBUG())
+  traceEvent("validMode: $validMode", get_LOG_DEBUG())
+  traceEvent("day: $day", get_LOG_DEBUG())
+  traceEvent("days: $days", get_LOG_DEBUG())
+  traceEvent("dayCheck: $dayCheck", get_LOG_DEBUG())
+  traceEvent("theTemperature.currentTemperature: $theTemperature.currentTemperature", get_LOG_DEBUG())
+  traceEvent("isThermostatSetToHeat: $isThermostatSetToHeat", get_LOG_DEBUG())
+  //traceEvent("modes: $modes", get_LOG_DEBUG())
   
   //theMotionSensor.currentMotion == "active" && 
   if ( validMode && dayCheck && activeTime )
@@ -164,7 +170,7 @@ def evaluate()
     if (!isThermostatSetToHeat)
     {
       def logMessage = "Turning thermostat on..."
-      log.debug(logMessage)
+      traceEvent(logMessage, get_LOG_DEBUG())
       //sendPush(logMessage)
       sendNotificationEvent(logMessage)
       theThermostat.heat()
@@ -175,7 +181,7 @@ def evaluate()
     if (isThermostatSetToHeat)
     {
       def logMessage = "Turning thermostat off..."
-      log.debug(logMessage)
+      traceEvent(logMessage, get_LOG_DEBUG())
       //sendPush(logMessage)
       sendNotificationEvent(logMessage)
       theThermostat.off()
@@ -187,9 +193,9 @@ def evaluate()
 // event handlers
 def theTemperatureHandler(evt)
 {
-  log.debug "theTemperatureHandler: $evt, $settings"
-  log.debug "evt.value: $evt.value"
-  log.debug("theTemperature.currentTemperature: $theTemperature.currentTemperature")
+  traceEvent("theTemperatureHandler: $evt, $settings", get_LOG_DEBUG())
+  traceEvent("evt.value: $evt.value", get_LOG_DEBUG())
+  traceEvent("theTemperature.currentTemperature: $theTemperature.currentTemperature", get_LOG_DEBUG())
   
   theThermostat.setTemperature(evt.integerValue)
   
@@ -198,8 +204,8 @@ def theTemperatureHandler(evt)
 
 def theThermostatHeatingSetpointHandler(evt)
 {
-  log.debug "theThermostatHeatingSetpointHandler: $evt, $settings"
-  log.debug "evt.value: $evt.value"
+  traceEvent("theThermostatHeatingSetpointHandler: $evt, $settings", get_LOG_DEBUG())
+  traceEvent("evt.value: $evt.value", get_LOG_DEBUG())
 }
 
 /* Called when Thermostat turns heating on/off.
@@ -207,8 +213,8 @@ def theThermostatHeatingSetpointHandler(evt)
  */
 def theThermostatOperatingStateHandler(evt)
 {
-  log.debug "theThermostatOperatingStateHandler: $evt, $settings"
-  log.debug "evt.value: $evt.value"
+  traceEvent("theThermostatOperatingStateHandler: $evt, $settings", get_LOG_DEBUG())
+  traceEvent("evt.value: $evt.value", get_LOG_DEBUG())
   
   //evaluate()
   
@@ -226,41 +232,41 @@ def theThermostatOperatingStateHandler(evt)
 
 def modeChangeHandler(evt)
 {
-  log.debug "modeChangeHandler: $evt, $settings"
-  log.debug "evt.value: $evt.value"
+  traceEvent("modeChangeHandler: $evt, $settings", get_LOG_DEBUG())
+  traceEvent("evt.value: $evt.value", get_LOG_DEBUG())
   
   evaluate()
 }
 
 def theMotionSensorHandler(evt)
 {
-  log.debug "theMotionSensorHandler: $evt, $settings"
-  log.debug "evt.value: $evt.value"
+  traceEvent("theMotionSensorHandler: $evt, $settings", get_LOG_DEBUG())
+  traceEvent("evt.value: $evt.value", get_LOG_DEBUG())
   evaluate()
 }
 
 def theSwitchSwitchHandler(evt)
 {
-  log.debug "theSwitchSwitchHandler: $evt, $settings"
-  log.debug "evt.value: $evt.value"
+  traceEvent("theSwitchSwitchHandler: $evt, $settings", get_LOG_DEBUG())
+  traceEvent("evt.value: $evt.value", get_LOG_DEBUG())
 }
 
 def startTimeStateHandler()
 {
-  log.debug("startTimeStateHandler")
+  traceEvent("startTimeStateHandler", get_LOG_DEBUG())
   evaluate()
 }
 
 def endTimeStateHandler()
 {
-  log.debug("endTimeStateHandler")
+  traceEvent("endTimeStateHandler", get_LOG_DEBUG())
   evaluate()
 }
 
 // catchall
 def event(evt)
 {
-  log.debug "value: $evt.value, event: $evt, settings: $settings, handlerName: ${evt.handlerName}"
+  traceEvent("value: $evt.value, event: $evt, settings: $settings, handlerName: ${evt.handlerName}", get_LOG_DEBUG())
 }
 
 // Supporting Routines.
@@ -269,7 +275,7 @@ def heaterSwitchControl(mode)
   if (mode == "on" && theSwitch.currentSwitch != "on")
   {
     def logMessage = "Turning heater on..."
-    log.debug(logMessage)
+    traceEvent(logMessage, get_LOG_DEBUG())
     //sendPush(logMessage)
     //sendNotificationEvent(logMessage)
     theSwitch.on()
@@ -277,10 +283,48 @@ def heaterSwitchControl(mode)
   else if (mode == "off" && theSwitch.currentSwitch != "off")
   {
     def logMessage = "Turning heater off..."
-    log.debug(logMessage)
+    traceEvent(logMessage, get_LOG_DEBUG())
     //sendPush(logMessage)
     //sendNotificationEvent(logMessage)
     theSwitch.off()
   }
 }
 
+private int get_LOG_ERROR() {return (int)1}
+private int get_LOG_WARN()  {return (int)2}
+private int get_LOG_INFO()  {return (int)3}
+private int get_LOG_DEBUG() {return (int)4}
+private int get_LOG_TRACE() {return (int)5}
+
+def traceEvent(message, traceLevel=5)
+{
+  int LOG_ERROR= get_LOG_ERROR()
+  int LOG_WARN=  get_LOG_WARN()
+  int LOG_INFO=  get_LOG_INFO()
+  int LOG_DEBUG= get_LOG_DEBUG()
+  int LOG_TRACE= get_LOG_TRACE()
+
+  int filterLevel = (int)(settings.logFilter ? settings.logFilter.toInteger() : LOG_WARN)
+
+  if (filterLevel >= traceLevel) 
+  {
+    switch (traceLevel) {
+      case LOG_ERROR:
+        log.error "${message}"
+        break
+      case LOG_WARN:
+        log.warn "${message}"
+        break
+      case LOG_INFO:
+        log.info  "${message}"
+        break
+      case LOG_TRACE:
+        log.trace "${message}"
+        break
+      case LOG_DEBUG:
+      default:
+        log.debug "${message}"
+        break
+    }  /* end switch*/              
+  }
+}
