@@ -1,0 +1,201 @@
+include 'asynchttp_v1'
+import java.text.SimpleDateFormat
+
+//import groovy.time.TimeCategory 
+//import groovy.time.TimeDuration
+
+/**
+*  Test App
+*
+*  Copyright 2017 Richard Murphy
+*
+*  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+*  in compliance with the License. You may obtain a copy of the License at:
+*
+*      http://www.apache.org/licenses/LICENSE-2.0
+*
+*  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+*  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+*  for the specific language governing permissions and limitations under the License.
+*
+*/
+
+definition(
+  name: "Ask Solar Panels",
+  namespace: "rmurfster",
+  author: "Richard Murphy",
+  description: "Get information about the Solar Panels",
+  category: "Convenience",
+  iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
+  iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
+  iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
+
+
+preferences 
+{
+  section("My Solar Panel Device") {
+    input "theSolarPanel", "capability.energyMeter", required: true
+  }
+}
+
+def installed() 
+{
+  initialize()
+}
+
+def updated() 
+{
+  unsubscribe()
+  initialize()
+}
+
+def initialize() 
+{
+  if (!state.accessToken) OAuthToken()
+
+  // Output page for getting OAuth Information for including in AWS node.js
+  log.info "Cheat sheet web page located at : ${getApiServerUrl()}/api/smartapps/installations/${app.id}/setup?access_token=${state.accessToken}"
+
+  // Schedule Sunrise/Sunset updater since the device handler can't get Sunrise/Sunset events!
+  def randomHour = (int)(Math.random() * 3)
+  def randomMin = (int)(Math.random() * 60)
+  def randomSec = (int)(Math.random() * 60)
+  def dateStr = "2017-03-03 ${randomHour + ":" + randomMin + ":" + randomSec}"
+  def scheduleDate = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(dateStr)  
+  log.debug "scheduleDate: ${scheduleDate}"
+  schedule(scheduleDate, setSunriseSunSet)
+  
+  // Set Sunrise/Sunset now.
+  setSunriseSunSet()  
+}
+
+mappings {
+  path("/b") { action: [GET: "processBegin"] }
+  path("/d") { action: [GET: "processDevice"] }
+  path("/setup") { action: [GET: "setupData"] }
+  //path("/u") { action: [GET: "getURLs"] }
+  //path("/cheat") { action: [GET: "cheat"] }
+  //path("/flash") { action: [GET: "flash"] }
+}
+
+def processBegin()
+{
+  log.debug "--Begin commands received--"
+  
+  def ver = params.Ver 		//Lambda Code Verisons
+  def lVer = params.lVer		//Version number of Lambda code
+  def date = params.Date		//Version date of Lambda code
+  
+  state.lambdaCode = "Lambda Code Version: ${ver} (${date})"
+  def LambdaVersion = lVer as int
+  def OOD = LambdaVersion < LambdaReq() ? "true" : "false"
+  
+  return ["OOD":OOD, "SmartAppVer": versionLong()]
+}
+
+//Version/Copyright/Information/Help-----------------------------------------------------------
+private textAppName() { return "Ask Solar Panels" }	
+private textVersion() {
+    def version = "SmartApp Version: 1.0.0 (02/27/2017)", lambdaVersion = state.lambdaCode ? "\n" + state.lambdaCode : ""
+    return "${version}${lambdaVersion}"
+}
+private versionInt(){ return 100 }
+private LambdaReq() { return 100 }
+private versionLong(){ return "1.0.0" }
+private textCopyright() {return "Copyright © 2017 Richard Murphy" }
+private textLicense() {
+	def text = "Licensed under the Apache License, Version 2.0 (the 'License'); you may not use this file except in compliance with the License. You may obtain a copy of the License at\n\n"+
+		"    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software distributed under the License is distributed on an 'AS IS' BASIS, "+
+		"WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License."
+}
+private textHelp() 
+{ 
+	def text = "This SmartApp provides an interface to control and query the Solar Panel Array configured within the SmartThings environment via the Amazon Echo ('Alexa')."
+}
+
+def setupData()
+{
+  def result ="<div style='padding:10px'><i><b><a href='http://aws.amazon.com' target='_blank'>Lambda</a> code variables:</b></i><br><br>var STappID = '${app.id}';<br>var STtoken = '${state.accessToken}';<br>"
+  
+  result += "var url='${getApiServerUrl()}/api/smartapps/installations/' + STappID + '/' ;<br><br><hr>"
+  
+	result += "<br><hr><br><i><b>URL of this setup page:</b></i><br><br>${getApiServerUrl()}/api/smartapps/installations/${app.id}/setup?access_token=${state.accessToken}<br><br><hr></div>"
+  
+	displayData(result)
+}
+
+def displayData(display)
+{
+	render(contentType: "text/html", 
+    data: """<!DOCTYPE html><html><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/></head><body style="margin: 0;">${display}</body></html>""")
+}
+
+def OAuthToken()
+{
+	try 
+  {
+    createAccessToken()
+		log.debug "Creating new Access Token"
+	} catch (e) { log.error "Access Token not defined. OAuth may not be enabled. Go to the SmartApp IDE settings to enable OAuth." }
+}
+
+def setSunriseSunSet()
+{
+  def sunRiseSet = getSunriseAndSunset()
+  log.debug "sunrise: ${sunRiseSet.sunrise}"
+  log.debug "sunset: ${sunRiseSet.sunset}"
+  
+  theSolarPanel.setSunriseSunset(sunRiseSet.sunrise, sunRiseSet.sunset)
+}
+
+def processDevice() 
+{
+  def dev = params.Device.toLowerCase() 	//Label of device
+  //def op = params.Operator				//Operation to perform
+  //def numVal = params.Num     			//Number for dimmer/PIN type settings
+  //def param = params.Param				//Other parameter (color)
+  
+  log.debug "-Device command received-"
+  log.debug "Dev: " + dev
+  //log.debug "Op: " + op
+  //log.debug "Num: " + numVal
+  //log.debug "Param: " + param
+
+  def me = theSolarPanel
+
+  def dfCurrentTime = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+  dfCurrentTime.setTimeZone(location.timeZone)
+  def dataTimeStamp = dfCurrentTime.parse(me.currentTimeStamp)
+  def currentTime = new Date()
+  def source = me.currentPowerSource == "Grid" ? "the grid" : "the PV array"
+  def currentBattery = me.currentBattery.toString()
+  def currentAcLoadAmps = me.currentAcLoadAmps.toString()
+  def currentTransformerTemperature = me.currentTransformerTemperature.toString()  
+  def bmkWatts = me.currentBmkVolts * me.currentBmkAmps
+
+  def chargeStatus = me.currentChargeStatus.toString()
+
+  def durationRaw
+  use (groovy.time.TimeCategory) {
+      durationRaw = new Date() - dataTimeStamp
+  }  
+  
+  String duration = durationRaw
+  duration = duration.replaceAll("\\.[0-9]+", "")
+  log.debug "duration: ${duration}"
+  
+  def batteryStatus = (String) ((me.currentBmkAmps < 0) ? " and falling" : ((me.currentBmkVolts > 53) ? " and charging" : ""))
+      
+  def outputTxt = "As of ${duration} ago, " +
+      "the batteries were at ${currentBattery}%${batteryStatus}. " +
+  	  "the inverter is currently using ${source} to satisfy the AC demand of ${currentAcLoadAmps} amps, " +
+      "and operating at a temperature of ${currentTransformerTemperature} degrees. "
+      
+  outputTxt += (String) ((chargeStatus == "unknown") ? "I am unable to determine the controller's charge mode. "
+        : "The controller's charge mode is ${chargeStatus}. ")
+  
+  log.debug "Out: ${outputTxt}"
+    
+  return ["voiceOutput" : outputTxt]
+}
+
