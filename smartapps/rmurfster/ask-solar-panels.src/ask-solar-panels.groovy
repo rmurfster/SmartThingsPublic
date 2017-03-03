@@ -36,6 +36,10 @@ preferences
   section("My Solar Panel Device") {
     input "theSolarPanel", "capability.energyMeter", required: true
   }
+  section("Debugging") {
+	input "logFilter", "number", title: "(0=off,1=ERROR only,2=<1+WARNING>,3=<2+INFO>,4=<3+DEBUG>,5=<4+TRACE>)",  
+    	range: "0..5", description: "optional", defaultValue: 3
+  }
 }
 
 def installed() 
@@ -54,15 +58,17 @@ def initialize()
   if (!state.accessToken) OAuthToken()
 
   // Output page for getting OAuth Information for including in AWS node.js
-  log.info "Cheat sheet web page located at : ${getApiServerUrl()}/api/smartapps/installations/${app.id}/setup?access_token=${state.accessToken}"
+  traceEvent("Cheat sheet web page located at : ${getApiServerUrl()}/api/smartapps/installations/${app.id}/setup?access_token=${state.accessToken}", get_LOG_INFO())
 
   // Schedule Sunrise/Sunset updater since the device handler can't get Sunrise/Sunset events!
   def randomHour = (int)(Math.random() * 3)
   def randomMin = (int)(Math.random() * 60)
   def randomSec = (int)(Math.random() * 60)
   def dateStr = "2017-03-03 ${randomHour + ":" + randomMin + ":" + randomSec}"
-  def scheduleDate = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(dateStr)  
-  log.debug "scheduleDate: ${scheduleDate}"
+  def sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss")
+  sdf.setTimeZone(location.timeZone)
+  def scheduleDate = sdf.parse(dateStr)  
+  traceEvent("scheduleDate: ${scheduleDate}", get_LOG_DEBUG())
   schedule(scheduleDate, setSunriseSunSet)
   
   // Set Sunrise/Sunset now.
@@ -80,7 +86,7 @@ mappings {
 
 def processBegin()
 {
-  log.debug "--Begin commands received--"
+  traceEvent("processBegin()", get_LOG_INFO())
   
   def ver = params.Ver 		//Lambda Code Verisons
   def lVer = params.lVer		//Version number of Lambda code
@@ -135,31 +141,76 @@ def OAuthToken()
 	try 
   {
     createAccessToken()
-		log.debug "Creating new Access Token"
-	} catch (e) { log.error "Access Token not defined. OAuth may not be enabled. Go to the SmartApp IDE settings to enable OAuth." }
+		traceEvent("Creating new Access Token", get_LOG_DEBUG())
+	} catch (e) { traceEvent("Access Token not defined. OAuth may not be enabled. Go to the SmartApp IDE settings to enable OAuth.", get_LOG_ERROR()) }
 }
 
 def setSunriseSunSet()
 {
   def sunRiseSet = getSunriseAndSunset()
-  log.debug "sunrise: ${sunRiseSet.sunrise}"
-  log.debug "sunset: ${sunRiseSet.sunset}"
+  traceEvent("sunrise: ${sunRiseSet.sunrise}", get_LOG_DEBUG())
+  traceEvent("sunset: ${sunRiseSet.sunset}", get_LOG_DEBUG())
   
   theSolarPanel.setSunriseSunset(sunRiseSet.sunrise, sunRiseSet.sunset)
 }
 
+private int get_LOG_ERROR() {return (int)1}
+private int get_LOG_WARN()  {return (int)2}
+private int get_LOG_INFO()  {return (int)3}
+private int get_LOG_DEBUG() {return (int)4}
+private int get_LOG_TRACE() {return (int)5}
+
+def traceEvent(message, traceLevel=5)
+{
+  int LOG_ERROR= get_LOG_ERROR()
+  int LOG_WARN=  get_LOG_WARN()
+  int LOG_INFO=  get_LOG_INFO()
+  int LOG_DEBUG= get_LOG_DEBUG()
+  int LOG_TRACE= get_LOG_TRACE()
+
+  int filterLevel = (int)(settings.logFilter ? settings.logFilter.toInteger() : LOG_WARN)
+
+  if (filterLevel >= traceLevel) 
+  {
+    switch (traceLevel) {
+      case LOG_ERROR:
+        log.error "${message}"
+        break
+      case LOG_WARN:
+        log.warn "${message}"
+        break
+      case LOG_INFO:
+        log.info  "${message}"
+        break
+      case LOG_TRACE:
+        log.trace "${message}"
+        break
+      case LOG_DEBUG:
+      default:
+        log.debug "${message}"
+        break
+    }  /* end switch*/              
+  }
+}
+
 def processDevice() 
 {
+  int LOG_ERROR= get_LOG_ERROR()
+  int LOG_WARN=  get_LOG_WARN()
+  int LOG_INFO=  get_LOG_INFO()
+  int LOG_DEBUG= get_LOG_DEBUG()
+  int LOG_TRACE= get_LOG_TRACE()
+  
   def dev = params.Device.toLowerCase() 	//Label of device
   //def op = params.Operator				//Operation to perform
   //def numVal = params.Num     			//Number for dimmer/PIN type settings
   //def param = params.Param				//Other parameter (color)
   
-  log.debug "-Device command received-"
-  log.debug "Dev: " + dev
-  //log.debug "Op: " + op
-  //log.debug "Num: " + numVal
-  //log.debug "Param: " + param
+  traceEvent("processDevice()", LOG_INFO)
+  traceEvent("Dev: " + dev, LOG_DEBUG)
+  //traceEvent("Op: " + op, LOG_DEBUG)
+  //traceEvent("Num: " + numVal, LOG_DEBUG)
+  //traceEvent("Param: " + param, LOG_DEBUG)
 
   def me = theSolarPanel
 
@@ -182,7 +233,7 @@ def processDevice()
   
   String duration = durationRaw
   duration = duration.replaceAll("\\.[0-9]+", "")
-  log.debug "duration: ${duration}"
+  traceEvent("duration: ${duration}", LOG_DEBUG)
   
   def batteryStatus = (String) ((me.currentBmkAmps < 0) ? " and falling" : ((me.currentBmkVolts > 53) ? " and charging" : ""))
       
@@ -194,7 +245,7 @@ def processDevice()
   outputTxt += (String) ((chargeStatus == "unknown") ? "I am unable to determine the controller's charge mode. "
         : "The controller's charge mode is ${chargeStatus}. ")
   
-  log.debug "Out: ${outputTxt}"
+  traceEvent("Out: ${outputTxt}", LOG_DEBUG)
     
   return ["voiceOutput" : outputTxt]
 }
