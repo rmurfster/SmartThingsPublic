@@ -197,77 +197,80 @@ def updated() {
 }
 
 def initialize() {
-app.updateLabel(inputScenarioNameA)
+    app.updateLabel(inputScenarioNameA)
 
-midNightReset()
+    midNightReset()
 
-if(A_motion) {
-	subscribe(settings.A_motion, "motion", onEventA)
-}
+    if(A_motion) {
+        subscribe(settings.A_motion, "motion", onEventA)
+    }
 
-if(A_acceleration) {
-	subscribe(settings.A_acceleration, "acceleration", onEventA)
-}
+    if(A_acceleration) {
+        subscribe(settings.A_acceleration, "acceleration", onEventA)
+    }
 
-if(A_contact) {
-	subscribe(settings.A_contact, "contact", onEventA)
-}
+    if(A_contact) {
+        subscribe(settings.A_contact, "contact", onEventA)
+    }
 
-if(A_lock) {
-	subscribe(settings.A_lock, "lock", onEventA)
-}
+    if(A_lock) {
+        subscribe(settings.A_lock, "lock", onEventA)
+    }
 
-if(A_switchDisable) {
-	subscribe(A_switches, "switch.off", onPressA)
-    subscribe(A_dimmers, "switch.off", onPressA)
-}
+    if(A_switchDisable) {
+        subscribe(A_switches, "switch.off", onPressA)
+        subscribe(A_dimmers, "switch.off", onPressA)
+    }
 
-if(A_mode) {
-    subscribe(location, onEventA)
-}
+    if(A_mode) {
+        subscribe(location, onEventA)
+    }
 }
 
 def onEventA(evt) {
+    if ((!A_triggerOnce || (A_triggerOnce && !state.A_triggered)) && (!A_switchDisable || (A_switchDisable && !state.A_triggered))) 
+    {
+        if ((!A_mode || A_mode.contains(location.mode)) && getTimeOk (A_timeStart, A_timeEnd) && getDayOk(A_day)) 
+        {
+            if ((!A_luxSensors) || (A_luxSensors.latestValue("illuminance") <= A_turnOnLux))
+            {
+                def A_levelOn = A_level as Integer
 
-if ((!A_triggerOnce || (A_triggerOnce && !state.A_triggered)) && (!A_switchDisable || (A_switchDisable && !state.A_triggered))) {
-if ((!A_mode || A_mode.contains(location.mode)) && getTimeOk (A_timeStart, A_timeEnd) && getDayOk(A_day)) {
-if ((!A_luxSensors) || (A_luxSensors.latestValue("illuminance") <= A_turnOnLux)){
-def A_levelOn = A_level as Integer
-
-if (getInputOk(A_motion, A_contact, A_lock, A_acceleration)) {
-        	log.debug("Motion, Door Open or Unlock Detected Running '${ScenarioNameA}'")
-            settings.A_dimmers?.setLevel(A_levelOn)
-            settings.A_switches?.on()
-            if (A_triggerOnce){
-            	state.A_triggered = true
-                if (!A_turnOff) {
-					runOnce (getMidnight(), midNightReset)
+                if (getInputOk(A_motion, A_contact, A_lock, A_acceleration)) {
+                            log.debug("Motion, Door Open or Unlock Detected Running '${ScenarioNameA}'")
+                            settings.A_dimmers?.setLevel(A_levelOn)
+                            settings.A_switches?.on()
+                            if (A_triggerOnce){
+                                state.A_triggered = true
+                                if (!A_turnOff) {
+                                    runOnce (getMidnight(), midNightReset)
+                                }
+                            }
+                            if (state.A_timerStart){
+                                unschedule(delayTurnOffA)
+                                state.A_timerStart = false
+                            }
+                }
+                else {
+                        if (settings.A_turnOff) {
+                        runIn(A_turnOff * 60, "delayTurnOffA")
+                        state.A_timerStart = true
+                        }
+                        else {
+                        settings.A_switches?.off()
+                        settings.A_dimmers?.setLevel(0)
+                            if (state.A_triggered) {
+                                runOnce (getMidnight(), midNightReset)
+                            }
+                        }
                 }
             }
-        	if (state.A_timerStart){
-            	unschedule(delayTurnOffA)
-            	state.A_timerStart = false
-        	}
-}
-else {
-    	if (settings.A_turnOff) {
-		runIn(A_turnOff * 60, "delayTurnOffA")
-        state.A_timerStart = true
         }
-        else {
-        settings.A_switches?.off()
-		settings.A_dimmers?.setLevel(0)
-        	if (state.A_triggered) {
-    			runOnce (getMidnight(), midNightReset)
-    		}
+        else
+        {
+            log.debug("Motion, Contact or Unlock detected outside of mode or time/day restriction.  Not running scenario.")
         }
-}
-}
-}
-else{
-log.debug("Motion, Contact or Unlock detected outside of mode or time/day restriction.  Not running scenario.")
-}
-}
+	}
 }
 
 def delayTurnOffA(){
@@ -281,24 +284,37 @@ def delayTurnOffA(){
 }
 
 def onPressA(evt) {
-if ((!A_mode || A_mode.contains(location.mode)) && getTimeOk (A_timeStart, A_timeEnd) && getDayOk(A_day)) {
-if ((!A_luxSensors) || (A_luxSensors.latestValue("illuminance") <= A_turnOnLux)){
-if ((!A_triggerOnce || (A_triggerOnce && !state.A_triggered)) && (!A_switchDisable || (A_switchDisable && !state.A_triggered))) {    
-    if (evt.physical){
-    	state.A_triggered = true
-        unschedule(delayTurnOffA)
-        runOnce (getTimeToReset(), midNightReset)
-        //runOnce (getMidnight(), midNightReset)
-        log.debug "Physical switch in '${ScenarioNameA}' pressed. Triggers for this scenario disabled."
-	}
+    log.debug("onPressA(evt: ${evt})")
+    log.debug("isPhysical: ${evt.isPhysical()}, evt.physical: ${evt.physical}")
+    if ((!A_mode || A_mode.contains(location.mode)) && getTimeOk (A_timeStart, A_timeEnd) && getDayOk(A_day)) 
+    {
+       log.debug("B")
+        if ((!A_luxSensors) || (A_luxSensors.latestValue("illuminance") <= A_turnOnLux))
+        {
+       		log.debug("C")
+            if ((!A_triggerOnce || (A_triggerOnce && !state.A_triggered)) && (!A_switchDisable || (A_switchDisable && !state.A_triggered))) 
+            {
+       			log.debug("D")
+                //if (evt.physical)
+                //{
+       				log.debug("E")
+                    state.A_triggered = true
+                    unschedule(delayTurnOffA)
+                    runOnce (getTimeToReset(), midNightReset)
+                    //runOnce (getMidnight(), midNightReset)
+                    log.debug "Physical switch in '${ScenarioNameA}' pressed. Triggers for this scenario disabled."
+                //}
+            }
+        }
+    }
 }
-}}}
 
 
 
 //Common Methods
 
 def midNightReset() {
+    log.debug("midNightReset()")
 	state.A_triggered = false
     state.B_triggered = false
     state.C_triggered = false

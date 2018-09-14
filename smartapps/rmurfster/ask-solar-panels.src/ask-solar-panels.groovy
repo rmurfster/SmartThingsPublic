@@ -216,12 +216,13 @@ def processDevice()
   def dataTimeStamp = dfCurrentTime.parse(me.currentTimeStamp)
   def currentTime = new Date()
   def source = me.currentPowerSource == "Grid" ? "the grid" : "the PV array"
-  def currentBattery = me.currentBattery.toString()
+  def batteryPercentage = me.currentBattery.toString()
   def currentAcLoadAmps = me.currentAcLoadAmps.toString()
   def currentTransformerTemperature = me.currentTransformerTemperature.toString()  
   def bmkWatts = me.currentBmkVolts * me.currentBmkAmps
 
-  def chargeStatus = me.currentChargeStatus.toString()
+  def chargeStatus = me.currentChargeStatus.toString().toLowerCase()
+  def chargeStatusVerb = (String) ((chargeStatus == "unknown") ? "" : chargeStatus.replace("bulk mppt", "absorb").replace("floatmppt", "float") + "ing")
 
   def durationRaw
   use (groovy.time.TimeCategory) {
@@ -232,15 +233,40 @@ def processDevice()
   duration = duration.replaceAll("\\.[0-9]+", "")
   traceEvent("duration: ${duration}", LOG_DEBUG)
   
-  def batteryStatus = (String) ((me.currentBmkAmps < 0) ? " and falling" : ((me.currentBmkVolts > 53) ? " and charging" : ""))
+  // Determine the Battery's Status.
+  def batteryStatus = ""
+  if (me.currentBmkAmps < 0)
+  {
+    batteryStatus = " and falling by ${Math.abs(me.currentBmkAmps)} amp" + (String)((Math.abs(me.currentBmkAmps) == 1) ? "" : "s")
+  }
+  else if (me.currentBmkAmps > 0 && (chargeStatus == "absorb" || chargeStatus == "bulk mppt"))
+  {
+    batteryStatus = " and absorbing by ${me.currentBmkAmps} amp" + (String)((me.currentBmkAmps == 1) ? "" : "s")
+  }
+  else
+  {
+    batteryStatus = " and ${chargeStatusVerb}"
+  }
+  
+  def outputTxt = ""
+
+  if (me.currentTransformerTemperature > 170)
+  {
+    outputTxt += "warning! the transformer's temperature is ${currentTransformerTemperature} degrees. "
+  }  
+  
+  outputTxt += "as of ${duration} ago, " +
+      "the batteries were at ${batteryPercentage}%${batteryStatus}. " +
+  	  "the inverter is using ${source} to satisfy the AC demand of ${currentAcLoadAmps} amps, "
       
-  def outputTxt = "As of ${duration} ago, " +
-      "the batteries were at ${currentBattery}%${batteryStatus}. " +
-  	  "the inverter is currently using ${source} to satisfy the AC demand of ${currentAcLoadAmps} amps, " +
-      "and operating at a temperature of ${currentTransformerTemperature} degrees. "
-      
-  outputTxt += (String) ((chargeStatus == "unknown") ? "I am unable to determine the controller's charge mode. "
-        : "The controller's charge mode is ${chargeStatus}. ")
+  if (chargeStatus == "unknown" || chargeStatus.contains("mppt"))
+  {
+    def chargeStatusText = chargeStatus.replace("floatmppt", "float MPPT").replace("bulkmppt", "bulk MPPT")
+    def bmkWattsText = (String)((chargeStatus.contains("mppt")) ? "at ${me.currentBmkVolts} volts" : "")
+    outputTxt += "the controller's charge mode is ${chargeStatusText} ${bmkWattsText}, "
+  }
+  
+  outputTxt += "and, the total output for today is ${me.currentEnergy} killowatt" + (String)((me.currentEnergy == 1) ? "" : "s")
   
   traceEvent("Out: ${outputTxt}", LOG_DEBUG)
     

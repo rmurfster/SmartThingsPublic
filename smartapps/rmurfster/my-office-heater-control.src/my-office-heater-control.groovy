@@ -53,13 +53,13 @@ preferences {
     input "theThermostat", "capability.thermostat", required: true
   }
   section("Switch for office heater...") {
-      input "theSwitch", "capability.switch", required: true
+      input "theSwitch", "capability.switch", required: false
   }
   section("Temperature sensor...") {
       input "theTemperature", "capability.temperatureMeasurement", required: true
   }
   section("Motion sensor...") {
-    input "theMotionSensor", "capability.motionSensor", required: true
+    input "theMotionSensor", "capability.motionSensor", required: false
 	}
   section("Start time...") {
     input "startTime", "time", title: "Start Time?", required: true
