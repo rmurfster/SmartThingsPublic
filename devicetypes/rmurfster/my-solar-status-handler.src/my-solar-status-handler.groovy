@@ -23,6 +23,7 @@ preferences {
 
 metadata {
   definition (name: "My Solar Status Handler", namespace: "rmurfster", author: "Richard Murphy") {
+    capability "Actuator"
     capability "Battery"
     capability "Energy Meter"
     capability "Power Meter"
@@ -178,14 +179,28 @@ def getSolarData()
   // See http://groovy-lang.org/processing-xml.html
   traceEvent("getSolarData()", get_LOG_INFO())
 
-  def params = [
+  def paramsInverter = [
     uri: "http://data.magnumenergy.com",
     path: "/MW1159",
     contentType: "xml"
       //requestContentType: 'application/xml'
   ]
+  
+  def authorization = "admin:k771229656"
+  def encoded = authorization.bytes.encodeBase64()
+  //traceEvent("authorization: ${authorization}", get_LOG_DEBUG())
+  //traceEvent("encoded: ${encoded}", get_LOG_DEBUG())
+  
+  def paramsController = [
+    uri: "http://murphyhome.mynetgear.com:8085",
+    path: "/SolarService.svc/GetClassicData/",
+    contentType: "json",
+    headers: [Authorization: "Basic " +encoded]
+  ]
 
-  asynchttp_v1.get(processResponse, params)
+  asynchttp_v1.get(processInverterResponse, paramsInverter)
+  
+  asynchttp_v1.get(processControllerResponse, paramsController)
 }
 
 void setSunriseSunset( sunrise, sunset )
@@ -236,7 +251,7 @@ def traceEvent(message, traceLevel=5)
   }
 }
 
-def processResponse(resp, data)
+def processInverterResponse(resp, data)
 {
   int LOG_ERROR= get_LOG_ERROR()
   int LOG_WARN=  get_LOG_WARN()
@@ -246,13 +261,13 @@ def processResponse(resp, data)
 
   def temp
   
-  traceEvent("processResponse()", LOG_INFO)
+  traceEvent("processInverterResponse()", LOG_INFO)
   
   if (resp.hasError())
   {
     traceEvent("resp.hasError(): ${resp.hasError()}", LOG_ERROR)
     traceEvent("resp.status: ${resp.status}", LOG_ERROR)
-    traceEvent("errorData: ${response.errorData}", LOG_ERROR)
+    //traceEvent("errorData: ${response.errorData}", LOG_ERROR)
     return
   }  
 
@@ -345,6 +360,7 @@ def processResponse(resp, data)
   }
   traceEvent("isDaylight: ${isDaylight}", LOG_DEBUG)
 
+  /* This is now handled in processControllerResponse()
   def chargeStatus = (String)(isDaylight ? "Bulk MPPT" : "Resting")
   if (isDaylight)
   {
@@ -358,12 +374,11 @@ def processResponse(resp, data)
     }  
   }
   traceEvent("chargeStatus: ${chargeStatus}", LOG_DEBUG)
+  */
 
   // Put data in our device registers
   sendEvent(name : "timeStamp", value : dataDate)
-  sendEvent(name : "chargeStatus", value: chargeStatus)
-  sendEvent(name : "power", value : 0)
-  sendEvent(name : "energy", value : 0)
+//  sendEvent(name : "chargeStatus", value: chargeStatus)
   sendEvent(name : "battery", value : percentCharge)
   sendEvent(name : "bmkVolts", value: bmkVolts)
   sendEvent(name : "bmkAmps", value: bmkAmps)
@@ -373,4 +388,79 @@ def processResponse(resp, data)
   sendEvent(name : "acLoadVolts", value: acLoadVolts)
   sendEvent(name : "acLoadAmps", value: acLoadAmps)
   sendEvent(name : "powerSource", value: powerSource)
+}
+
+def processControllerResponse(resp, data)
+{
+  int LOG_ERROR= get_LOG_ERROR()
+  int LOG_WARN=  get_LOG_WARN()
+  int LOG_INFO=  get_LOG_INFO()
+  int LOG_DEBUG= get_LOG_DEBUG()
+  int LOG_TRACE= get_LOG_TRACE()
+
+  def temp
+  
+  traceEvent("processControllerResponse()", LOG_INFO)
+  
+  if (resp.hasError())
+  {
+    traceEvent("resp.hasError(): ${resp.hasError()}", LOG_ERROR)
+    traceEvent("resp.status: ${resp.status}", LOG_ERROR)
+    //traceEvent("errorData: ${response.errorData}", LOG_ERROR)
+    
+    sendEvent(name : "power", value : -1)
+    sendEvent(name : "energy", value : -1)
+    sendEvent(name : "chargeStatus", value: "Unknown")
+    
+    return
+  }  
+
+  def headers = resp.headers
+  headers.each { header, value ->
+      traceEvent("$header: $value", LOG_DEBUG)
+  }
+
+  //traceEvent("resp class: ${resp.getClass()}", LOG_DEBUG)
+  //traceEvent("resp.data class: ${resp.data.class}", LOG_DEBUG)
+  //traceEvent("response contentType: ${resp.contentType}", LOG_DEBUG)
+  traceEvent("response data: ${resp.data}", LOG_DEBUG)
+  traceEvent("resp: ${resp}", LOG_DEBUG)
+  traceEvent("data: ${data}", LOG_DEBUG)
+  traceEvent("resp.json: ${resp.json}", LOG_DEBUG)
+  
+  traceEvent("resp.json.error: ${resp.json.error}", LOG_DEBUG)
+  traceEvent("resp.json.errorMessage: ${resp.json.errorMessage}", LOG_DEBUG)
+  traceEvent("resp.json.batteryVolts: ${resp.json.batteryVolts}", LOG_DEBUG)
+  traceEvent("resp.json.batteryCurrent: ${resp.json.batteryCurrent}", LOG_DEBUG)
+  traceEvent("resp.json.pvVolts: ${resp.json.pvVolts}", LOG_DEBUG)
+  traceEvent("resp.json.pvCurrent: ${resp.json.pvCurrent}", LOG_DEBUG)
+  traceEvent("resp.json.wattsOut: ${resp.json.wattsOut}", LOG_DEBUG)
+  traceEvent("resp.json.ampsOut: ${resp.json.ampsOut}", LOG_DEBUG)
+  traceEvent("resp.json.pvEnergyToday: ${resp.json.pvEnergyToday}", LOG_DEBUG)
+  traceEvent("resp.json.ahToday: ${resp.json.ahToday}", LOG_DEBUG)
+  traceEvent("resp.json.floatMinutesToday: ${resp.json.floatMinutesToday}", LOG_DEBUG)
+  traceEvent("resp.json.batteryTemp: ${resp.json.batteryTemp}", LOG_DEBUG)
+  traceEvent("resp.json.chargeStatus: ${resp.json.chargeStatus}", LOG_DEBUG)
+  traceEvent("resp.json.wbCurrent: ${resp.json.wbCurrent}", LOG_DEBUG)
+  traceEvent("resp.json.aux1State: ${resp.json.aux1State}", LOG_DEBUG)
+  traceEvent("resp.json.aux2State: ${resp.json.aux2State}", LOG_DEBUG)
+  traceEvent("resp.json.lastUpdate: ${resp.json.lastUpdate}", LOG_DEBUG)
+  traceEvent("resp.json.wbNetAmpHours: ${resp.json.wbNetAmpHours}", LOG_DEBUG)
+  traceEvent("resp.json.wbAmpHoursRemaining: ${resp.json.wbAmpHoursRemaining}", LOG_DEBUG)
+  traceEvent("resp.json.wbSOC: ${resp.json.wbSOC}", LOG_DEBUG)
+  traceEvent("resp.json.pcBoardTemperature: ${resp.json.pcBoardTemperature}", LOG_DEBUG)
+  traceEvent("resp.json.fetTemperature: ${resp.json.fetTemperature}", LOG_DEBUG)
+  traceEvent("resp.json.absorbMinutesToday: ${resp.json.absorbMinutesToday}", LOG_DEBUG)
+  traceEvent("resp.json.reasonLastResting: ${resp.json.reasonLastResting}", LOG_DEBUG)
+  traceEvent("resp.json.nightMinutesNoPower: ${resp.json.nightMinutesNoPower}", LOG_DEBUG)
+
+  def chargeStatus = resp.json.chargeStatus
+  if (chargeStatus == "BulkMppt") chargeStatus = "Bulk MPPT"
+  if (chargeStatus == "BulkFloat") chargeStatus = "Bulk Float"
+  
+  sendEvent(name : "power", value : resp.json.wattsOut)
+  sendEvent(name : "energy", value : resp.json.pvEnergyToday)
+  sendEvent(name : "chargeStatus", value: chargeStatus)
+  
+  traceEvent("chargeStatus: ${chargeStatus}", LOG_DEBUG)
 }
