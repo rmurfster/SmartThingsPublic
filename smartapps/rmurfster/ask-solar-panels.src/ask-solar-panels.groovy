@@ -211,7 +211,8 @@ def processDevice()
 
   def me = theSolarPanel
 
-  def dfCurrentTime = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+  //def dfCurrentTime = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+  def dfCurrentTime = new java.text.SimpleDateFormat("MM/dd/yyyy KK:mm:ss a")
   dfCurrentTime.setTimeZone(location.timeZone)
   def dataTimeStamp = dfCurrentTime.parse(me.currentTimeStamp)
   def currentTime = new Date()
