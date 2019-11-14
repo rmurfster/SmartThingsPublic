@@ -377,7 +377,7 @@ def processInverterResponse(resp, data)
   */
 
   // Put data in our device registers
-  sendEvent(name : "timeStamp", value : dataDate)
+  //sendEvent(name : "timeStamp", value : dataDate)
 //  sendEvent(name : "chargeStatus", value: chargeStatus)
   sendEvent(name : "battery", value : percentCharge)
   sendEvent(name : "bmkVolts", value: bmkVolts)
@@ -402,6 +402,11 @@ def processControllerResponse(resp, data)
   
   traceEvent("processControllerResponse()", LOG_INFO)
   
+  def headers = resp.headers
+  headers.each { header, value ->
+      traceEvent("$header: $value", LOG_DEBUG)
+  }
+  
   if (resp.hasError())
   {
     traceEvent("resp.hasError(): ${resp.hasError()}", LOG_ERROR)
@@ -414,11 +419,6 @@ def processControllerResponse(resp, data)
     
     return
   }  
-
-  def headers = resp.headers
-  headers.each { header, value ->
-      traceEvent("$header: $value", LOG_DEBUG)
-  }
 
   //traceEvent("resp class: ${resp.getClass()}", LOG_DEBUG)
   //traceEvent("resp.data class: ${resp.data.class}", LOG_DEBUG)
@@ -461,6 +461,7 @@ def processControllerResponse(resp, data)
   sendEvent(name : "power", value : resp.json.wattsOut)
   sendEvent(name : "energy", value : resp.json.pvEnergyToday)
   sendEvent(name : "chargeStatus", value: chargeStatus)
-  
+  sendEvent(name : "timeStamp", value: resp.json.lastUpdate)
+
   traceEvent("chargeStatus: ${chargeStatus}", LOG_DEBUG)
 }
