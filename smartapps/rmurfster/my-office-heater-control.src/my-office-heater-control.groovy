@@ -52,7 +52,7 @@ preferences {
   section("Choose thermostat... ") {
     input "theThermostat", "capability.thermostat", required: true
   }
-  section("Switch for office heater...") {
+  section("Switch for heating/cooling device...") {
       input "theSwitch", "capability.switch", required: false
   }
   section("Temperature sensor...") {
@@ -70,6 +70,10 @@ preferences {
   section("On Which Days") {
         input "days", "enum", title: "Select Days of the Week", required: true, multiple: true, 
           options: ["Monday": "Monday", "Tuesday": "Tuesday", "Wednesday": "Wednesday", "Thursday": "Thursday", "Friday": "Friday", "Saturday": "Saturday", "Sunday": "Sunday"]
+  }
+  section("Default Mode") {
+        input "defaultMode", "enum", title: "Select Default Heat/Cool Mode", required: true, multiple: false, 
+          options: ["Heat": "Heat", "Cool": "Cool"]
   }
   section ("On Modes...") {
     input "onModes", "mode", title: "select mode(s)", multiple: true, required: true
@@ -120,7 +124,6 @@ def initialize() {
   theThermostat.setTemperature(theTemperature.currentTemperature ?
       theTemperature.currentTemperature : 70)
 
-
   // Set Initial Thermostat Mode.
   evaluate()
 }
@@ -148,6 +151,7 @@ def evaluate()
   def activeTime = timeOfDayIsBetween(startTime, endTime, currentTime, location.timeZone)
 
   def isThermostatSetToHeat =( theThermostat.currentThermostatMode in ["heat", "emergency heat", "auto"])
+  def isThermostatModeOn = (theThermostat.currentThermostatMode != "off")
 
   traceEvent("currentMode: $currentMode", get_LOG_DEBUG())
   traceEvent("theMotionSensor.currentMotion: $theMotionSensor.currentMotion", get_LOG_DEBUG())
@@ -159,26 +163,31 @@ def evaluate()
   traceEvent("validMode: $validMode", get_LOG_DEBUG())
   traceEvent("day: $day", get_LOG_DEBUG())
   traceEvent("days: $days", get_LOG_DEBUG())
+  traceEvent("defaultMode: $defaultMode", get_LOG_DEBUG())
   traceEvent("dayCheck: $dayCheck", get_LOG_DEBUG())
   traceEvent("theTemperature.currentTemperature: $theTemperature.currentTemperature", get_LOG_DEBUG())
   traceEvent("isThermostatSetToHeat: $isThermostatSetToHeat", get_LOG_DEBUG())
+  traceEvent("isThermostatModeOn: $isThermostatModeOn", get_LOG_DEBUG())
   //traceEvent("modes: $modes", get_LOG_DEBUG())
   
   //theMotionSensor.currentMotion == "active" && 
   if ( validMode && dayCheck && activeTime )
   {
-    if (!isThermostatSetToHeat)
+    if (!isThermostatModeOn)
     {
       def logMessage = "Turning thermostat on..."
       traceEvent(logMessage, get_LOG_DEBUG())
       //sendPush(logMessage)
       sendNotificationEvent(logMessage)
-      theThermostat.heat()
+      if (defaultMode == "heat")
+      	theThermostat.heat()
+      else
+        theThermostat.cool()
     }
   }
   else
   {
-    if (isThermostatSetToHeat)
+    if (isThermostatModeOn)
     {
       def logMessage = "Turning thermostat off..."
       traceEvent(logMessage, get_LOG_DEBUG())
@@ -219,8 +228,9 @@ def theThermostatOperatingStateHandler(evt)
   //evaluate()
   
   def isThermostatSetToHeat = (theThermostat.currentThermostatMode in ["heat", "emergency heat", "auto"])
+  def isThermostatModeOn = (theThermostat.currentThermostatMode != "off")
   
-  if (isThermostatSetToHeat && evt.value == "heating")
+  if (isThermostatModeOn && evt.value in ["heating","cooling"])
   {
     heaterSwitchControl("on")
   }
@@ -274,7 +284,7 @@ def heaterSwitchControl(mode)
 {
   if (mode == "on" && theSwitch.currentSwitch != "on")
   {
-    def logMessage = "Turning heater on..."
+    def logMessage = "Turning switch on..."
     traceEvent(logMessage, get_LOG_DEBUG())
     //sendPush(logMessage)
     //sendNotificationEvent(logMessage)
@@ -282,7 +292,7 @@ def heaterSwitchControl(mode)
   }
   else if (mode == "off" && theSwitch.currentSwitch != "off")
   {
-    def logMessage = "Turning heater off..."
+    def logMessage = "Turning switch off..."
     traceEvent(logMessage, get_LOG_DEBUG())
     //sendPush(logMessage)
     //sendNotificationEvent(logMessage)
