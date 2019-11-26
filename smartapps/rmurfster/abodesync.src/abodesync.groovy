@@ -411,13 +411,13 @@ def abodeModeChanged()
   def data = request?.JSON
   def alarmSystemStatus = location.currentState("alarmSystemStatus").value
   def currentState = state.currentState["alarmSystemStatus"]
-  def newAlarmSystemStatus = (data.value == "Gateway Disarmed - Standby") ? "off" :
-                             (data.value == "Gateway Armed - Away") ? "away" :
-                             (data.value == "Gateway Armed - Home") ? "stay" :
+  def newAlarmSystemStatus = (data.value ==~ "Gateway Disarmed.*") ? "off" :
+                             (data.value ==~ "Gateway Armed.*- Away") ? "away" :
+                             (data.value ==~ "Gateway Armed.*- Home") ? "stay" :
                              null
-  def newLocationMode      = (data.value == "Gateway Disarmed - Standby") ? "Home" :
-                             (data.value == "Gateway Armed - Away") ? "Away" :
-                             (data.value == "Gateway Armed - Home") ? "Night" :
+  def newLocationMode      = (data.value ==~ "Gateway Disarmed.*") ? "Home" :
+                             (data.value ==~ "Gateway Armed.*- Away") ? "Away" :
+                             (data.value ==~ "Gateway Armed.*- Home") ? "Night" :
                              null
 
   traceEvent("value: [$data.value]", get_LOG_DEBUG())
@@ -428,15 +428,15 @@ def abodeModeChanged()
   traceEvent("location.mode: [$location.mode]", get_LOG_DEBUG())
   traceEvent("newLocationMode: [$newLocationMode]", get_LOG_DEBUG())
 
-  if ((newAlarmSystemStatus && (newAlarmSystemStatus != alarmSystemStatus)) || 
-      (newAlarmSystemStatus != currentState))
+  if (newAlarmSystemStatus != null && 
+  		((newAlarmSystemStatus != alarmSystemStatus) || (newAlarmSystemStatus != currentState)))
   {
     traceEvent("Changing shm mode to $newAlarmSystemStatus", get_LOG_DEBUG())
     state.currentState["alarmSystemStatus"] = newAlarmSystemStatus
     sendLocationEvent(name: 'alarmSystemStatus', value: newAlarmSystemStatus)
   }
   
-  if (newLocationMode && location.mode != newLocationMode)
+  if (newLocationMode != null && location.mode != newLocationMode)
   {
     traceEvent("Changing Location mode to $newLocationMode ", get_LOG_DEBUG())
     setLocationMode(newLocationMode)
