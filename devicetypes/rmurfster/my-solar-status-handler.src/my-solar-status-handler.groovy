@@ -316,14 +316,19 @@ def processInverterResponse(resp, data)
   traceEvent("transformerTemperatures: ${transformerTemperature}", LOG_DEBUG)
 
   // Get AC Load in volts / amps
+  def acLoadVolts = -1
+  def acLoadAmps = -1
   def acOut = sResponse.tr[14].td.text()
   traceEvent("acOut: ${acOut}", LOG_DEBUG)
   // "Approximately 120 volts AC @ 5 amps"
-  temp = acOut.split(" ")
-  def acLoadVolts = temp[1].toInteger()
-  def acLoadAmps = temp[5].toInteger()
-  traceEvent("acLoadVolts: ${acLoadVolts}", LOG_DEBUG)
-  traceEvent("acLoadAmps: ${acLoadAmps}", LOG_DEBUG)
+  if (acOut != "Inactive.")
+  {
+    temp = acOut.split(" ")
+    acLoadVolts = temp[1].toInteger()
+    acLoadAmps = temp[5].toInteger()
+  	traceEvent("acLoadVolts: ${acLoadVolts}", LOG_DEBUG)
+  	traceEvent("acLoadAmps: ${acLoadAmps}", LOG_DEBUG)
+  }
   
   // Get AC In (if in Grid Mode)
   // "Approximately 4 amps"
