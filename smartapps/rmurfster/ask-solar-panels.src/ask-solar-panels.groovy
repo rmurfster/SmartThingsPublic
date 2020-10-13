@@ -227,11 +227,16 @@ def processDevice()
 
   def durationRaw
   use (groovy.time.TimeCategory) {
-      durationRaw = new Date() - dataTimeStamp
+      durationRaw = currentTime - dataTimeStamp
   }  
   
   String duration = durationRaw
   duration = duration.replaceAll("\\.[0-9]+", "")
+  traceEvent("location.timeZone: ${location.timeZone}", LOG_DEBUG)
+  traceEvent("dataTimeStamp: ${dataTimeStamp}", LOG_DEBUG)
+  traceEvent("me.currentTimeStamp: ${me.currentTimeStamp}", LOG_DEBUG)
+  traceEvent("currentTime: ${currentTime}", LOG_DEBUG)
+  traceEvent("durationRaw: ${durationRaw}", LOG_DEBUG)
   traceEvent("duration: ${duration}", LOG_DEBUG)
   
   // Determine the Battery's Status.
