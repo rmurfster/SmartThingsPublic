@@ -87,7 +87,44 @@ def initialize() {
   subscribe(location, "alarmSystemStatus", shmHandler)
 
   //subscribe(myContactSensors, "contact", evaluateDeviceEvent)
-  //subscribe(location, "mode", modeChangeHandler)
+  subscribe(location, "mode", modeChangeHandler)
+  //subscribe(location, modeChangeHandler)
+}
+
+def modeChangeHandler(evt)
+{
+  traceEvent("modeChangeHandler: $evt, $settings", get_LOG_DEBUG())
+  traceEvent("evt.value: $evt.value", get_LOG_DEBUG())
+  
+  //def alarmSystemStatus = location.currentState("alarmSystemStatus").value
+  def currentState = state.currentState["mode"]
+  
+  traceEvent("evt.device: $evt.device", get_LOG_DEBUG())
+  //traceEvent("alarmSystemStatus: $alarmSystemStatus", get_LOG_DEBUG())
+  traceEvent("currentState: $currentState", get_LOG_DEBUG())
+
+  def alarmValue = (evt.value == "Home") ? "StandBy" :
+                   (evt.value == "Away") ? "Away" :
+                   (evt.value == "Night") ? "Home" :
+                   null
+
+  traceEvent("alarmValue: $alarmValue", get_LOG_DEBUG())
+
+  if (alarmValue && evt.value != currentState)
+  {
+    def newEvt = [ value: alarmValue, 
+                   device: evt.device, 
+                   displayName: "Mode",
+                   deviceId: evt.deviceId ]
+
+    def makerEvent = buildIFTTTCommand(newEvt)
+    
+    if (makerEvent != null)
+    {
+      state.currentState["mode"] = evt.value
+      sendMakerEvent(makerEvent)
+    }
+  }
 }
 
 def evaluateDeviceEvent(evt)
@@ -264,6 +301,10 @@ def initializeDeviceStates()
   def alarmSystemStatus = location.currentState("alarmSystemStatus").value
   traceEvent("alarmSystemStatus: $alarmSystemStatus", get_LOG_DEBUG())
   state.currentState["alarmSystemStatus"] = location.currentState("alarmSystemStatus").value
+  
+  def locationMode = location.getMode()
+  traceEvent("locationMode: $locationMode", get_LOG_DEBUG())
+  state.currentState["mode"] = locationMode  
 }
 
 def getDevice(deviceName)
